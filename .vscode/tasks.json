@@ -2,10 +2,21 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Generate Tools",
+      "type": "shell",
+      "command": "node scripts/generate-tools.js",
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
       "label": "Start Server",
       "type": "shell",
       "command": "npx -y http-server -p 8080 -c-1",
       "isBackground": true,
+      "dependsOn": [
+        "Generate Tools"
+      ],
       "problemMatcher": {
         "owner": "custom",
         "pattern": {

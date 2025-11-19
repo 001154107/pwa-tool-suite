@@ -1,0 +1,15 @@
+{
+  "name": "pwa-tool-suite",
+  "version": "1.0.0",
+  "description": "PWA Tool Suite with automated tool discovery",
+  "scripts": {
+    "prestart": "node scripts/generate-tools.js",
+    "start": "npx http-server -p 8080 -c-1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "http-server": "^14.1.1"
+  }
+}
