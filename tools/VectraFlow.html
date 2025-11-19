@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VectraFlow - Hybrid Code & GUI SVG Editor</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0f172a; color: #f1f5f9; }
+        .select-none { user-select: none; -webkit-user-select: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- Icon Helper ---
+        const IconWrapper = ({ children, size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+
+        const MousePointer2Icon = (props) => <IconWrapper {...props}><path d="m4.03 4.03 4.57 14.29a1 1 0 0 0 1.86.1l2.33-6.99 6.99-2.33a1 1 0 0 0 .1-1.86l-14.29-4.57a1 1 0 0 0-1.56 1.56z"/></IconWrapper>;
+        const SquareIcon = (props) => <IconWrapper {...props}><rect width="18" height="18" x="3" y="3" rx="2"/></IconWrapper>;
+        const CircleIcon = (props) => <IconWrapper {...props}><circle cx="12" cy="12" r="10"/></IconWrapper>;
+        const TypeIcon = (props) => <IconWrapper {...props}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></IconWrapper>;
+        const MinusIcon = (props) => <IconWrapper {...props}><path d="M5 12h14"/></IconWrapper>; // Used for Path/Line
+        const MoveIcon = (props) => <IconWrapper {...props}><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/></IconWrapper>;
+        const CodeIcon = (props) => <IconWrapper {...props}><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></IconWrapper>;
+        const LayersIcon = (props) => <IconWrapper {...props}><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></IconWrapper>;
+        const Link2Icon = (props) => <IconWrapper {...props}><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></IconWrapper>;
+        const Trash2Icon = (props) => <IconWrapper {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></IconWrapper>;
+        const MaximizeIcon = (props) => <IconWrapper {...props}><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></IconWrapper>;
+        const DownloadIcon = (props) => <IconWrapper {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></IconWrapper>;
+
+
+        /**
+         * VectraFlow - Hybrid Code & GUI SVG Editor
+         * Built for Biomedical Engineering flowcharts & Diagramming
+         */
+
+        const INITIAL_SVG = `<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#9ca3af"/>
+            </marker>
+          </defs>
+          
+          <text x="200" y="20" text-anchor="middle" font-size="18" font-weight="600" fill="#b91c1c">Equivalence Loophole</text>
+          
+          <!-- Flowchart Lines -->
+          <path id="p1" d="M 50 50 L 150 50" stroke="#fca5a5" stroke-width="2" marker-end="url(#arrow)"/>
+          <path id="p2" d="M 150 50 L 250 50" stroke="#fca5a5" stroke-width="2" marker-end="url(#arrow)"/>
+          <path id="p3" d="M 250 50 L 350 50" stroke="#fca5a5" stroke-width="2" marker-end="url(#arrow)"/>
+          
+          <!-- Nodes -->
+          <circle cx="50" cy="50" r="10" fill="#fca5a5"/>
+          <circle cx="150" cy="50" r="10" fill="#fca5a5"/>
+          <circle cx="250" cy="50" r="10" fill="#fca5a5"/>
+          <circle cx="350" cy="50" r="10" fill="#ef4444"/>
+          
+          <text x="50" y="70" text-anchor="middle" font-size="12">Predicate</text>
+          <text x="150" y="70" text-anchor="middle" font-size="12">Device A</text>
+          <text x="250" y="70" text-anchor="middle" font-size="12">Device B</text>
+          <text x="350" y="70" text-anchor="middle" font-size="12" fill="#b91c1c">Flawed Device</text>
+        </svg>`;
+
+        // Helper to convert SVG kebab-case attributes to React camelCase props
+        const toReactAttributes = (attrs) => {
+          const map = {
+            'stroke-width': 'strokeWidth',
+            'stroke-linecap': 'strokeLinecap',
+            'stroke-linejoin': 'strokeLinejoin',
+            'stroke-dasharray': 'strokeDasharray',
+            'stroke-dashoffset': 'strokeDashoffset',
+            'font-family': 'fontFamily',
+            'font-size': 'fontSize',
+            'font-weight': 'fontWeight',
+            'text-anchor': 'textAnchor',
+            'marker-end': 'markerEnd',
+            'marker-start': 'markerStart',
+            'marker-mid': 'markerMid',
+            'stop-color': 'stopColor',
+            'stop-opacity': 'stopOpacity',
+            'class': 'className'
+          };
+
+          const newAttrs = {};
+          Object.keys(attrs).forEach(key => {
+            const newKey = map[key] || key;
+            newAttrs[newKey] = attrs[key];
+          });
+          return newAttrs;
+        };
+
+        const App = () => {
+          // --- State ---
+          const [code, setCode] = useState(INITIAL_SVG);
+          const [elements, setElements] = useState([]);
+          const [selectedIds, setSelectedIds] = useState([]);
+          const [hoveredId, setHoveredId] = useState(null);
+          const [tool, setTool] = useState('select'); // select, rect, circle, line, text
+          const [smartLink, setSmartLink] = useState(true); // The "Unicorn" feature
+          const [viewBox, setViewBox] = useState({ x: 0, y: 0, w: 400, h: 300 });
+          
+          // Refs for interaction
+          const svgRef = useRef(null);
+          const dragRef = useRef({ 
+            isDragging: false, 
+            startX: 0, 
+            startY: 0, 
+            elementsStartPos: {},
+            isLasso: false,
+            lassoStart: { x: 0, y: 0 },
+            lassoCurrent: { x: 0, y: 0 }
+          });
+
+          // --- Parsing Logic ---
+          
+          // Parse SVG string to JSON object model
+          const parseSVG = (svgString) => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(svgString, "image/svg+xml");
+            const errorNode = doc.querySelector("parsererror");
+            if (errorNode) return null;
+
+            const svgEl = doc.querySelector("svg");
+            if (!svgEl) return null;
+
+            // Update Viewbox
+            const vb = svgEl.getAttribute("viewBox");
+            if (vb) {
+              const [vx, vy, vw, vh] = vb.split(' ').map(Number);
+              setViewBox({ x: vx, y: vy, w: vw, h: vh });
+            }
+
+            // Extract relevant children
+            const parsedElements = [];
+            let idCounter = 0;
+
+            const processNode = (node) => {
+              if (node.nodeType !== 1) return; // Element nodes only
+              const tag = node.tagName.toLowerCase();
+              if (['defs', 'style', 'title'].includes(tag)) return; // Skip meta for GUI editing list
+
+              const attrs = {};
+              for (let i = 0; i < node.attributes.length; i++) {
+                attrs[node.attributes[i].name] = node.attributes[i].value;
+              }
+              
+              // Ensure ID
+              if (!attrs.id) {
+                attrs.id = `gen_${tag}_${idCounter++}`;
+              }
+
+              // Extract content for text
+              let content = null;
+              if (tag === 'text') content = node.textContent;
+
+              parsedElements.push({
+                id: attrs.id,
+                tag,
+                attrs,
+                content
+              });
+            };
+
+            Array.from(svgEl.children).forEach(processNode);
+            return parsedElements;
+          };
+
+          // Initialize
+          useEffect(() => {
+            const parsed = parseSVG(code);
+            if (parsed) setElements(parsed);
+          }, []); // Run once on mount, subsequent updates handled by handlers
+
+          // Serialize JSON model back to SVG string
+          const generateSVG = (elems) => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(code, "image/svg+xml");
+            const svgEl = doc.querySelector("svg");
+            
+            if (!svgEl) return code;
+
+            // Helper to get direct children of specific types that we manage
+            const getManagedChildren = () => {
+                return Array.from(svgEl.children).filter(child => 
+                    ['rect', 'circle', 'path', 'text'].includes(child.tagName.toLowerCase())
+                );
+            };
+
+            const existingNodes = getManagedChildren();
+            const processedNodes = new Set();
+
+            // Update or create elements
+            elems.forEach(el => {
+              let node = doc.getElementById(el.id);
+              
+              // IMPROVED MATCHING:
+              // If node doesn't exist by ID, try to match with an existing un-ID'd node of same tag.
+              // This prevents duplication when hydrating from initial code that lacks IDs.
+              if (!node) {
+                const candidate = existingNodes.find(n => 
+                     n.tagName.toLowerCase() === el.tag && 
+                     !n.getAttribute('id') &&
+                     !processedNodes.has(n)
+                );
+                if (candidate) {
+                     node = candidate;
+                     node.setAttribute('id', el.id);
+                }
+              }
+
+              // If still no node, create a new one
+              if (!node) {
+                node = doc.createElementNS("http://www.w3.org/2000/svg", el.tag);
+                node.setAttribute("id", el.id);
+                svgEl.appendChild(node);
+              }
+
+              // Mark this node as processed so we don't match or delete it later
+              processedNodes.add(node);
+
+              // Update attributes
+              Object.entries(el.attrs).forEach(([key, val]) => {
+                node.setAttribute(key, val);
+              });
+
+              if (el.tag === 'text') {
+                node.textContent = el.content;
+              }
+            });
+
+            // Remove orphans: Nodes that exist in DOM but are no longer in our 'elems' state
+            existingNodes.forEach(node => {
+                if (!processedNodes.has(node)) {
+                    svgEl.removeChild(node);
+                }
+            });
+            
+            return new XMLSerializer().serializeToString(doc);
+          };
+
+          // --- Interaction Logic ---
+
+          const getMousePos = (e) => {
+            if (!svgRef.current) return { x: 0, y: 0 };
+            const CTM = svgRef.current.getScreenCTM();
+            return {
+              x: (e.clientX - CTM.e) / CTM.a,
+              y: (e.clientY - CTM.f) / CTM.d
+            };
+          };
+
+          const handleMouseDown = (e, id) => {
+            // Prevent default browser text selection
+            e.preventDefault();
+
+            const pos = getMousePos(e);
+            
+            // TOOL: Create New Element
+            if (tool !== 'select') {
+              e.stopPropagation();
+              createNewElement(tool, pos);
+              setTool('select'); // Reset to select after create
+              return;
+            }
+
+            // TOOL: Select / Drag
+            dragRef.current.isDragging = true;
+            dragRef.current.startX = pos.x;
+            dragRef.current.startY = pos.y;
+
+            if (id) {
+              e.stopPropagation();
+              // If clicking unselected item without shift, select only it
+              if (!selectedIds.includes(id) && !e.shiftKey) {
+                setSelectedIds([id]);
+              } else if (e.shiftKey) {
+                setSelectedIds(prev => prev.includes(id) ? prev : [...prev, id]);
+              }
+              
+              // Store initial positions for all selected items
+              const startPositions = {};
+              elements.forEach(el => {
+                if (selectedIds.includes(el.id) || el.id === id) {
+                   // Clone attributes to avoid ref issues
+                   startPositions[el.id] = { ...el.attrs };
+                }
+              });
+              dragRef.current.elementsStartPos = startPositions;
+            } else {
+              // Lasso start
+              dragRef.current.isLasso = true;
+              dragRef.current.lassoStart = pos;
+              dragRef.current.lassoCurrent = pos;
+              setSelectedIds([]); // Clear selection
+            }
+          };
+
+          const handleMouseMove = (e) => {
+            const currentPos = getMousePos(e);
+
+            if (dragRef.current.isLasso) {
+              dragRef.current.lassoCurrent = currentPos;
+              // Visual update handled by render
+              // Real-time selection logic could go here, but expensive. Do on mouse up.
+              // Force re-render for lasso box
+              setElements([...elements]); 
+              return;
+            }
+
+            if (!dragRef.current.isDragging) return;
+
+            const dx = currentPos.x - dragRef.current.startX;
+            const dy = currentPos.y - dragRef.current.startY;
+
+            const updatedElements = elements.map(el => {
+              // Is this element being dragged?
+              if (dragRef.current.elementsStartPos[el.id]) {
+                const startAttrs = dragRef.current.elementsStartPos[el.id];
+                const newAttrs = { ...el.attrs };
+
+                // --- Geometry Logic ---
+                if (el.tag === 'circle') {
+                  newAttrs.cx = parseFloat(startAttrs.cx || 0) + dx;
+                  newAttrs.cy = parseFloat(startAttrs.cy || 0) + dy;
+                  
+                  // SMART LINK LOGIC (The Unicorn Feature)
+                  if (smartLink) updateConnectedPaths(el, dx, dy, elements);
+
+                } else if (el.tag === 'rect' || el.tag === 'text') {
+                  newAttrs.x = parseFloat(startAttrs.x || 0) + dx;
+                  newAttrs.y = parseFloat(startAttrs.y || 0) + dy;
+                } else if (el.tag === 'path') {
+                  // Simple path translation (parsing d attribute is complex, doing simple offset)
+                  // For this demo, we only translate paths if selected specifically. 
+                  // If they are "smart linked", they are updated by the circles.
+                }
+
+                return { ...el, attrs: newAttrs };
+              }
+              
+              // Logic for Smart Linked Paths (Updating the lines when circles move)
+              // This is handled in the 'circle' block above, but we need to apply those side-effects here.
+              // Since map() is pure, we actually need to update the STATE elements array outside the map or complex reduce.
+              // For simplicity/perf in this prototype: We will re-calculate connections on every frame for the *current* state.
+              return el;
+            });
+            
+            // Apply Smart Link updates to paths
+            if (smartLink) {
+              const movingNodes = elements.filter(el => dragRef.current.elementsStartPos[el.id]);
+              
+              movingNodes.forEach(node => {
+                const startAttrs = dragRef.current.elementsStartPos[node.id];
+                // Only circles support smart link in this demo
+                if (node.tag !== 'circle') return; 
+                
+                // Current node position
+                const nodeX = parseFloat(startAttrs.cx || 0) + dx;
+                const nodeY = parseFloat(startAttrs.cy || 0) + dy;
+                const oldX = parseFloat(startAttrs.cx || 0);
+                const oldY = parseFloat(startAttrs.cy || 0);
+
+                // Find paths connected to the OLD position and move them to NEW position
+                updatedElements.forEach(path => {
+                    if (path.tag !== 'path') return;
+                    
+                    // Very basic path parser for "M x y L x y" format
+                    // This regex looks for coordinates matching the old circle position
+                    // and replaces them with the new position.
+                    // Tolerance of 1px
+                    
+                    let d = path.attrs.d || '';
+                    const commands = d.split(/(?=[ML])/); // Split by command
+                    
+                    const newCommands = commands.map(cmd => {
+                        const parts = cmd.trim().split(/\s+/);
+                        if (parts.length < 3) return cmd; // M x y
+                        
+                        const cmdType = parts[0];
+                        let px = parseFloat(parts[1]);
+                        let py = parseFloat(parts[2]);
+                        
+                        // Check distance to old node pos
+                        const dist = Math.sqrt(Math.pow(px - oldX, 2) + Math.pow(py - oldY, 2));
+                        
+                        if (dist < 5) { // 5px snap radius
+                           return `${cmdType} ${Math.round(nodeX)} ${Math.round(nodeY)}`;
+                        }
+                        return cmd;
+                    });
+                    
+                    path.attrs.d = newCommands.join(' ');
+                });
+              });
+            }
+
+            setElements(updatedElements);
+          };
+
+          const updateConnectedPaths = (node, dx, dy, allElements) => {
+              // Helper logic folded into main loop for state consistency
+          };
+
+          const handleMouseUp = (e) => {
+            if (dragRef.current.isLasso) {
+                // Perform Lasso Selection
+                const { startX, startY } = dragRef.current; // stored raw
+                const { x: endX, y: endY } = dragRef.current.lassoCurrent;
+                const left = Math.min(dragRef.current.lassoStart.x, endX);
+                const right = Math.max(dragRef.current.lassoStart.x, endX);
+                const top = Math.min(dragRef.current.lassoStart.y, endY);
+                const bottom = Math.max(dragRef.current.lassoStart.y, endY);
+
+                const newSelection = [];
+                elements.forEach(el => {
+                    // Bounding box approximation
+                    let ex = 0, ey = 0;
+                    if (el.tag === 'circle') { ex = parseFloat(el.attrs.cx); ey = parseFloat(el.attrs.cy); }
+                    if (el.tag === 'rect' || el.tag === 'text') { ex = parseFloat(el.attrs.x); ey = parseFloat(el.attrs.y); }
+                    
+                    if (ex >= left && ex <= right && ey >= top && ey <= bottom) {
+                        newSelection.push(el.id);
+                    }
+                });
+                setSelectedIds(newSelection);
+            }
+
+            dragRef.current.isDragging = false;
+            dragRef.current.isLasso = false;
+            dragRef.current.lassoStart = {x:0,y:0};
+            dragRef.current.lassoCurrent = {x:0,y:0};
+            dragRef.current.elementsStartPos = {};
+            
+            // Sync to code on drop
+            const newCode = generateSVG(elements);
+            setCode(newCode);
+          };
+
+          // --- CRUD Operations ---
+
+          const createNewElement = (type, pos) => {
+            const id = `new_${type}_${Date.now()}`;
+            const newEl = { id, tag: type, attrs: {}, content: null };
+
+            if (type === 'rect') {
+              newEl.attrs = { x: Math.round(pos.x), y: Math.round(pos.y), width: 40, height: 40, fill: '#dcfce7', stroke: '#166534', 'stroke-width': 2, rx: 5 };
+            } else if (type === 'circle') {
+              newEl.attrs = { cx: Math.round(pos.x), cy: Math.round(pos.y), r: 20, fill: '#fca5a5' };
+            } else if (type === 'text') {
+              newEl.attrs = { x: Math.round(pos.x), y: Math.round(pos.y), fill: '#374151', 'font-size': 14, 'text-anchor': 'middle' };
+              newEl.content = 'New Label';
+            } else if (type === 'path') {
+              newEl.attrs = { d: `M ${Math.round(pos.x)} ${Math.round(pos.y)} L ${Math.round(pos.x + 50)} ${Math.round(pos.y)}`, stroke: '#9ca3af', 'stroke-width': 2, fill: 'none', 'marker-end': 'url(#arrow)' };
+            }
+
+            const updated = [...elements, newEl];
+            setElements(updated);
+            setCode(generateSVG(updated));
+            setSelectedIds([id]);
+          };
+
+          const deleteSelected = () => {
+            const updated = elements.filter(el => !selectedIds.includes(el.id));
+            setElements(updated);
+            setSelectedIds([]);
+            setCode(generateSVG(updated));
+          };
+
+          // --- Code Editor Handler ---
+          const handleCodeChange = (e) => {
+            const val = e.target.value;
+            setCode(val);
+            const parsed = parseSVG(val);
+            if (parsed) setElements(parsed);
+          };
+
+          return (
+            <div className="flex flex-col h-screen bg-slate-900 text-slate-100 font-sans overflow-hidden">
+              {/* Toolbar */}
+              <div className="h-14 bg-slate-800 border-b border-slate-700 flex items-center px-4 justify-between">
+                <div className="flex items-center space-x-4">
+                  <h1 className="text-lg font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent mr-4">
+                    VectraFlow
+                  </h1>
+                  
+                  <div className="flex bg-slate-700 rounded-lg p-1 space-x-1">
+                    <ToolButton active={tool === 'select'} onClick={() => setTool('select')} icon={MousePointer2Icon} label="Select (V)" />
+                    <div className="w-px h-6 bg-slate-600 mx-1" />
+                    <ToolButton active={tool === 'rect'} onClick={() => setTool('rect')} icon={SquareIcon} label="Rect" />
+                    <ToolButton active={tool === 'circle'} onClick={() => setTool('circle')} icon={CircleIcon} label="Circle" />
+                    <ToolButton active={tool === 'path'} onClick={() => setTool('path')} icon={MinusIcon} label="Path" />
+                    <ToolButton active={tool === 'text'} onClick={() => setTool('text')} icon={TypeIcon} label="Text" />
+                  </div>
+
+                  <div className="flex items-center space-x-2 ml-4">
+                    <button 
+                       onClick={() => setSmartLink(!smartLink)}
+                       className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-all ${smartLink ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'bg-slate-700 text-slate-400 border border-transparent'}`}
+                    >
+                       <Link2Icon size={16} className="mr-2" />
+                       Smart Link {smartLink ? 'ON' : 'OFF'}
+                    </button>
+                    <span className="text-xs text-slate-500 max-w-[150px] leading-tight hidden xl:block">
+                       Moves arrows when you drag circles.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                   <button onClick={deleteSelected} disabled={selectedIds.length === 0} className="p-2 text-red-400 hover:bg-red-400/10 rounded-md disabled:opacity-30">
+                     <Trash2Icon size={18} />
+                   </button>
+                   <button onClick={() => navigator.clipboard.writeText(code)} className="flex items-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded-md text-sm">
+                     <CodeIcon size={16} className="mr-2" /> Copy SVG
+                   </button>
+                </div>
+              </div>
+
+              {/* Main Workspace */}
+              <div className="flex flex-1 overflow-hidden">
+                
+                {/* Left: Code Editor */}
+                <div className="w-1/3 min-w-[300px] border-r border-slate-700 flex flex-col">
+                    <div className="bg-slate-800 px-4 py-2 text-xs text-slate-400 flex justify-between">
+                        <span>Source Code</span>
+                        <span>Auto-Updates</span>
+                    </div>
+                    <textarea 
+                        value={code}
+                        onChange={handleCodeChange}
+                        className="flex-1 bg-[#1e1e1e] text-blue-300 font-mono text-sm p-4 resize-none focus:outline-none border-none leading-relaxed"
+                        spellCheck="false"
+                    />
+                </div>
+
+                {/* Right: Canvas */}
+                <div className="flex-1 bg-[#121212] relative overflow-hidden flex flex-col">
+                    
+                    {/* Canvas Info Overlay */}
+                    <div className="absolute top-4 right-4 pointer-events-none z-10 flex flex-col items-end space-y-2">
+                        <div className="bg-slate-800/80 backdrop-blur px-3 py-1 rounded text-xs text-slate-400 border border-slate-700">
+                            Zoom: 100% (Fit)
+                        </div>
+                        {hoveredId && (
+                            <div className="bg-indigo-500/20 px-3 py-1 rounded text-xs text-indigo-300 border border-indigo-500/30">
+                                ID: {hoveredId}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex-1 flex items-center justify-center p-8 overflow-auto select-none" 
+                         onMouseMove={handleMouseMove}
+                         onMouseUp={handleMouseUp}
+                         onMouseLeave={handleMouseUp}
+                    >
+                        <svg 
+                            ref={svgRef}
+                            viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
+                            className="bg-white shadow-2xl"
+                            style={{ 
+                                width: '100%', 
+                                maxWidth: '800px', 
+                                aspectRatio: `${viewBox.w}/${viewBox.h}`,
+                                cursor: tool === 'select' ? 'default' : 'crosshair'
+                            }}
+                            onMouseDown={(e) => handleMouseDown(e, null)}
+                        >
+                            {/* Render elements via React to allow interactivity */}
+                            {elements.map(el => {
+                                const isSelected = selectedIds.includes(el.id);
+                                
+                                // Render standard SVG element
+                                const Component = el.tag;
+                                // Skip non-visual elements for main loop (handled in raw svg injection if strictly needed, but we parsed them out)
+                                if (!['rect','circle','path','text'].includes(el.tag)) return null;
+
+                                const reactAttrs = toReactAttributes(el.attrs);
+
+                                return (
+                                    <g key={el.id}
+                                       onMouseDown={(e) => handleMouseDown(e, el.id)}
+                                       onMouseEnter={() => setHoveredId(el.id)}
+                                       onMouseLeave={() => setHoveredId(null)}
+                                       className="group"
+                                       style={{ cursor: tool === 'select' ? 'grab' : 'crosshair' }}
+                                    >
+                                        <Component 
+                                            {...reactAttrs} 
+                                            className="transition-opacity"
+                                            // visual feedback for selection
+                                            stroke={isSelected ? '#3b82f6' : el.attrs.stroke}
+                                            strokeWidth={isSelected ? (parseFloat(el.attrs['stroke-width'] || 1) + 2) : el.attrs['stroke-width']}
+                                            style={{ pointerEvents: dragRef.current.isDragging ? 'none' : 'auto' }}
+                                        >
+                                            {el.content}
+                                        </Component>
+                                        
+                                        {/* Selection/Hover Handles (Visual Only) */}
+                                        {isSelected && el.tag === 'circle' && (
+                                            <circle cx={el.attrs.cx} cy={el.attrs.cy} r={parseFloat(el.attrs.r) + 4} fill="none" stroke="#3b82f6" strokeWidth="1" strokeDasharray="4 2" />
+                                        )}
+                                        {isSelected && el.tag === 'rect' && (
+                                            <rect x={parseFloat(el.attrs.x)-2} y={parseFloat(el.attrs.y)-2} width={parseFloat(el.attrs.width)+4} height={parseFloat(el.attrs.height)+4} fill="none" stroke="#3b82f6" strokeWidth="1" strokeDasharray="4 2" />
+                                        )}
+                                    </g>
+                                );
+                            })}
+
+                            {/* Definitions (Markers) - Hardcoded injection or parsed logic needed. 
+                                For this MVP, we inject the arrow marker so arrows work. 
+                            */}
+                            <defs>
+                                <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#9ca3af"/>
+                                </marker>
+                            </defs>
+
+                            {/* Lasso Box Overlay */}
+                            {dragRef.current.isLasso && (
+                                <rect 
+                                    x={Math.min(dragRef.current.lassoStart.x, dragRef.current.lassoCurrent.x)}
+                                    y={Math.min(dragRef.current.lassoStart.y, dragRef.current.lassoCurrent.y)}
+                                    width={Math.abs(dragRef.current.lassoCurrent.x - dragRef.current.lassoStart.x)}
+                                    height={Math.abs(dragRef.current.lassoCurrent.y - dragRef.current.lassoStart.y)}
+                                    fill="rgba(59, 130, 246, 0.2)"
+                                    stroke="#3b82f6"
+                                    strokeWidth="1"
+                                />
+                            )}
+
+                        </svg>
+                    </div>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        const ToolButton = ({ active, onClick, icon: Icon, label }) => (
+          <button
+            onClick={onClick}
+            title={label}
+            className={`p-2 rounded transition-colors ${active ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-600'}`}
+          >
+            <Icon size={20} />
+          </button>
+        );
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

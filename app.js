@@ -10,16 +10,17 @@ if ('serviceWorker' in navigator) {
 
 const toolList = document.getElementById('tool-list');
 
-// This is a placeholder. In a real scenario, you might fetch this from a file or have a build step.
-const tools = [
-    // Example: { "name": "My Cool Tool", "url": "tools/my-cool-tool.html" }
-];
-
-tools.forEach(tool => {
-    const listItem = document.createElement('li');
-    const link = document.createElement('a');
-    link.href = tool.url;
-    link.textContent = tool.name;
-    listItem.appendChild(link);
-    toolList.appendChild(listItem);
-});
+// Fetch tools from the generated JSON file
+fetch('tools.json')
+    .then(response => response.json())
+    .then(tools => {
+        tools.forEach(tool => {
+            const listItem = document.createElement('li');
+            const link = document.createElement('a');
+            link.href = tool.url;
+            link.textContent = tool.name;
+            listItem.appendChild(link);
+            toolList.appendChild(listItem);
+        });
+    })
+    .catch(err => console.error('Error loading tools:', err));
