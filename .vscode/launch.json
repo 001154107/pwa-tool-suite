@@ -1,0 +1,30 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "msedge",
+            "request": "launch",
+            "name": "Launch Edge with DevTools",
+            "url": "http://localhost:8080",
+            "webRoot": "${workspaceFolder}",
+            "presentation": {
+                "hidden": false,
+                "group": "",
+                "order": 1
+            },
+            "preLaunchTask": "Start Server"
+        },
+        {
+            "type": "msedge",
+            "request": "launch",
+            "name": "Launch Edge (Headless)",
+            "url": "http://localhost:8080",
+            "webRoot": "${workspaceFolder}",
+            "runtimeArgs": [
+                "--headless",
+                "--remote-debugging-port=9222"
+            ],
+            "preLaunchTask": "Start Server"
+        }
+    ]
+}

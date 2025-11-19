@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History Network Graph</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- D3.js for data visualization -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Custom Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none; /* Prevents pull-to-refresh on mobile */
+        }
+        /* Custom styles for graph elements */
+        .node-group {
+            cursor: grab;
+        }
+        .node-group:active {
+            cursor: grabbing;
+        }
+        .node-rect {
+             stroke-width: 2px;
+        }
+        .node-text {
+            font-size: 12px;
+            font-weight: 500;
+            fill: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            pointer-events: none; /* Make text unselectable */
+        }
+        .link {
+            fill: none;
+            stroke-opacity: 0.7;
+        }
+        .link.inter-domain {
+            stroke-dasharray: 5, 5;
+        }
+        .arrow {
+            fill-opacity: 0.9;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 antialiased">
+    <div class="flex flex-col h-screen">
+        <!-- Header -->
+        <header class="bg-white dark:bg-gray-800 shadow-md p-4 z-10 flex-shrink-0">
+            <div class="container mx-auto flex justify-between items-center">
+                <h1 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Browsing History Graph</h1>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="flex-grow flex flex-col md:flex-row overflow-hidden">
+            <!-- Controls Panel -->
+            <div class="w-full md:w-80 lg:w-96 p-4 bg-white dark:bg-gray-800 border-t md:border-t-0 md:border-r border-gray-200 dark:border-gray-700 overflow-y-auto flex-shrink-0">
+                <h2 class="text-lg font-semibold mb-3">Controls</h2>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Paste a chronological list of URLs below, one per line. The graph will visualize your browsing path.
+                </p>
+                <textarea id="url-input" class="w-full h-48 md:h-64 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="https://www.google.com/search?q=d3js\nhttps://d3js.org/\nhttps://d3js.org/getting-started\nhttps://github.com/d3/d3\nhttps://www.google.com/search?q=tailwind+css\nhttps://tailwindcss.com/\n..."></textarea>
+                <button id="render-button" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">
+                    Render Graph
+                </button>
+                 <div id="instructions" class="mt-6 text-sm text-gray-500 dark:text-gray-400 space-y-2">
+                    <p><b>Zoom:</b> Use your mouse wheel or pinch on a touchscreen.</p>
+                    <p><b>Pan/Scroll:</b> Click and drag, or swipe on a touchscreen.</p>
+                 </div>
+            </div>
+
+            <!-- Graph Area -->
+            <main class="flex-grow bg-gray-200 dark:bg-gray-900 relative min-h-[300px] md:min-h-0" id="graph-container">
+                 <!-- Loading Indicator (Throbber) -->
+                <div id="loader" class="absolute inset-0 bg-gray-200 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center z-20 hidden">
+                    <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const renderButton = document.getElementById('render-button');
+            const urlInput = document.getElementById('url-input');
+            const graphContainer = document.getElementById('graph-container');
+            const loader = document.getElementById('loader');
+
+            urlInput.value = [
+                'https://www.google.com/search?q=data+visualization',
+                'https://en.wikipedia.org/wiki/Data_visualization',
+                'https://en.wikipedia.org/wiki/Infographic',
+                'https://en.wikipedia.org/wiki/Edward_Tufte',
+                'https://www.google.com/search?q=d3.js+force+layout',
+                'https://observablehq.com/@d3/force-directed-graph',
+                'https://github.com/d3/d3-force',
+                'https://www.youtube.com/watch?v=pGJ_tq_Oh3c',
+                'https://www.youtube.com/watch?v=nTSru6L20lc',
+                'https://www.reddit.com/r/dataisbeautiful/',
+                'https://www.google.com/search?q=web+design+inspiration',
+                'https://www.awwwards.com/',
+                'https://www.awwwards.com/websites/clean/',
+                'https://dribbble.com/',
+                'https://dribbble.com/shots/popular/web-design'
+            ].join('\n');
+            
+            let simulation;
+
+            const renderGraph = () => {
+                if (simulation) simulation.stop();
+
+                loader.classList.remove('hidden');
+                d3.select(graphContainer).select('svg').remove();
+                const existingError = graphContainer.querySelector('.error-message');
+                if (existingError) existingError.remove();
+
+                setTimeout(() => {
+                    const rawText = urlInput.value.trim();
+                    if (!rawText) {
+                        graphContainer.innerHTML += `<div class="flex items-center justify-center h-full text-gray-500">Please paste some URLs to begin.</div>`;
+                        loader.classList.add('hidden');
+                        return;
+                    }
+                    
+                    const width = graphContainer.clientWidth;
+                    const height = graphContainer.clientHeight;
+
+                    if (width <= 0 || height <= 0) {
+                        graphContainer.innerHTML += `<div class="error-message flex items-center justify-center h-full text-red-500">Error: Graph container has no size.</div>`;
+                        loader.classList.add('hidden');
+                        return;
+                    }
+
+                    const urls = rawText.split('\n').filter(Boolean);
+
+                    const nodes = urls.map((url, i) => {
+                        let domain = 'unknown';
+                        try {
+                            domain = new URL(url).hostname.replace('www.', '');
+                        } catch (e) {
+                            domain = url.split('/')[0] || 'invalid-url';
+                        }
+                        return { id: i, url: url, domain: domain, timestamp: i };
+                    });
+
+                    const links = [];
+                    for (let i = 0; i < nodes.length - 1; i++) {
+                        links.push({
+                            source: nodes[i],
+                            target: nodes[i + 1],
+                            type: nodes[i].domain === nodes[i+1].domain ? 'intra-domain' : 'inter-domain'
+                        });
+                    }
+
+                    const xScale = d3.scaleLinear().domain([0, nodes.length - 1]).range([150, width - 150]);
+                    const uniqueDomains = [...new Set(nodes.map(d => d.domain))];
+                    const yScale = d3.scalePoint().domain(uniqueDomains).range([100, height - 100]).padding(0.5);
+                    const colorScale = d3.scaleOrdinal(d3.schemeCategory10).domain(uniqueDomains);
+
+                    nodes.forEach(node => {
+                        node.x = xScale(node.timestamp);
+                        node.y = yScale(node.domain);
+                    });
+                    
+                    const svg = d3.select(graphContainer).append('svg')
+                        .attr('width', width)
+                        .attr('height', height)
+                        .attr('viewBox', [0, 0, width, height]);
+
+                    const g = svg.append('g');
+                    
+                    const node = g.append('g')
+                        .selectAll('.node-group')
+                        .data(nodes)
+                        .join('g')
+                        .attr('class', 'node-group');
+
+                    const nodeText = node.append('text')
+                        .attr('class', 'node-text')
+                        .attr('text-anchor', 'middle')
+                        .attr('dominant-baseline', 'central')
+                        .text(d => d.domain);
+                    
+                    const padding = { x: 10, y: 5 };
+                    node.each(function(d) {
+                        const bbox = d3.select(this).select('text').node().getBBox();
+                        d.width = bbox.width + 2 * padding.x;
+                        d.height = bbox.height + 2 * padding.y;
+                    });
+
+                    node.insert('rect', 'text')
+                        .attr('class', 'node-rect')
+                        .attr('width', d => d.width)
+                        .attr('height', d => d.height)
+                        .attr('x', d => -d.width / 2)
+                        .attr('y', d => -d.height / 2)
+                        .attr('rx', 8)
+                        .attr('fill', d => colorScale(d.domain))
+                        .attr('stroke', d => d3.color(colorScale(d.domain)).darker(1));
+
+                    simulation = d3.forceSimulation(nodes)
+                        // *** FIX: Added X-force to maintain chronological order ***
+                        .force('x', d3.forceX(d => xScale(d.timestamp)).strength(0.2))
+                        .force('y', d3.forceY(d => yScale(d.domain)).strength(0.1))
+                        .force('collide', d3.forceCollide().radius(d => d.width / 2 + 5).strength(1))
+                        .on('tick', ticked);
+
+                    g.append('defs').selectAll('marker')
+                        .data(links.filter(l => l.type === 'inter-domain'))
+                        .join('marker')
+                        .attr('id', d => `arrow-${d.target.id}`)
+                        .attr('viewBox', '0 -5 10 10').attr('refX', 5).attr('refY', 0)
+                        .attr('markerWidth', 6).attr('markerHeight', 6).attr('orient', 'auto')
+                        .append('path').attr('d', 'M0,-5L10,0L0,5')
+                        .attr('fill', d => colorScale(d.source.domain)).attr('class', 'arrow');
+
+                    const link = g.append('g').selectAll('path').data(links).join('path')
+                        .attr('class', d => `link ${d.type}`)
+                        .attr('stroke', d => colorScale(d.source.domain))
+                        .attr('stroke-width', 2)
+                        .attr('marker-end', d => d.type === 'inter-domain' ? `url(#arrow-${d.target.id})` : null);
+                    
+                    node.call(d3.drag()
+                        .on('start', dragstarted)
+                        .on('drag', dragged)
+                        .on('end', dragended));
+
+                    const zoom = d3.zoom().scaleExtent([0.1, 8]).on('zoom', (event) => {
+                        g.attr('transform', event.transform);
+                    });
+                    svg.call(zoom);
+
+                    function ticked() {
+                        link.attr('d', d => arcPath(d));
+                        node.attr('transform', d => `translate(${d.x},${d.y})`);
+                    }
+
+                    function arcPath(d) {
+                        const source = d.source; const target = d.target;
+                        const dx = target.x - source.x; const dy = target.y - source.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist === 0) return '';
+                        
+                        // *** FIX: Calculate intersection point for arrowhead alignment ***
+                        const inset = target.width / 2;
+                        const newTargetX = target.x - (dx / dist) * inset;
+                        const newTargetY = target.y - (dy / dist) * inset;
+
+                        const dr = dist * 1.5;
+                        const sweep = (d.source.id % 2 === 0) ? 1:0;
+
+                        return `M${source.x},${source.y}A${dr},${dr} 0 0,${sweep} ${newTargetX},${newTargetY}`;
+                    }
+                    
+                    // *** FIX: Correct drag handlers using d3.pointer ***
+                    function dragstarted(event, d) {
+                        if (!event.active) simulation.alphaTarget(0.3).restart();
+                        const [px, py] = d3.pointer(event, g.node());
+                        d.fx = px;
+                        d.fy = py;
+                    }
+                    function dragged(event, d) {
+                        const [px, py] = d3.pointer(event, g.node());
+                        d.fx = px;
+                        d.fy = py;
+                    }
+                    function dragended(event, d) {
+                        if (!event.active) simulation.alphaTarget(0);
+                        d.fx = null;
+                        d.fy = null;
+                    }
+                    
+                    loader.classList.add('hidden');
+
+                }, 20);
+            };
+
+            renderButton.addEventListener('click', renderGraph);
+
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => {
+                    if (d3.select(graphContainer).select('svg').node()) {
+                       renderGraph();
+                    }
+                }, 250); // Debounce resize event
+            });
+
+            renderGraph();
+        });
+    </script>
+</body>
+</html>
